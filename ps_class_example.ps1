@@ -46,3 +46,8 @@ class RabbitMQPublisher {
 # Example usage:
 $publisher = [RabbitMQPublisher]::new("https://rabbitmq.svc.com", "abc", "abc")
 $publisher.PublishMessage("refta.notify", "queue_name", "this is a test")
+
+. .\RabbitMQPublisher.ps1   # dot-source the file to load the class
+
+$publisher = [RabbitMQPublisher]::new("https://rabbitmq.svc.com", "abc", "abc")
+$publisher.PublishMessage("refta.notify", "queue_name", "hello world")
