@@ -10,8 +10,8 @@ snowflake:
 sqlserver:
   server: "your_sqlserver_hostname"
   database: "your_database"
-  username: "your_username"
-  password: "your_password"
+  auth_type: "windows"  # Use 'windows' for Windows Authentication or 'sql' for SQL Server Authentication
+  # username and password only needed if auth_type is 'sql'
   schema: "dbo"
 
 filesystem:
