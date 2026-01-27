@@ -1,29 +1,52 @@
+# Snowflake Reader Account to On-Prem Parquet CDC Solution
+# Minimal Working Configuration
+
+# Snowflake Reader Account Connection
 snowflake:
-  account: "your_account.snowflakecomputing.com"    # Replace with your account
-  user: "your_reader_username"                      # Replace with your username
-  password: "your_password"                         # Replace with your password
-  warehouse: "COMPUTE_WH"                           # Replace with your warehouse
-  database: "PROD_DB"                               # Replace with your database
-  schema: "PUBLIC"                                  # Replace with your schema
-  loadtracker_table: "LOADTRACKER"                  # Name of loadtracker table
+  account: "your_account.snowflakecomputing.com"
+  user: "your_username"
+  password: "your_password"
+  warehouse: "your_warehouse"
+  database: "your_database"
+  schema: "your_schema"
+  role: "your_role"  # Optional
+  loadtracker_table: "LOADTRACKER"
 
+# SQL Server Connection (for extracting primary keys)
 sqlserver:
-  server: "your_sqlserver.company.com"              # Replace with SQL Server
-  database: "PROD_DB"                               # Replace with database
-  auth_type: "windows"                              # Use 'windows' or 'sql'
-  
-  # Only needed if auth_type is 'sql':
-  username: "sql_user"                              # Not needed for Windows auth
-  password: "sql_password"                          # Not needed for Windows auth
-  
-  schema: "dbo"                                     # Schema where tables exist
+  server: "localhost"
+  database: "your_database"
+  auth_type: "windows"
+  driver: "SQL Server"
+  schema: "dbo"
 
+# File System Configuration
 filesystem:
-  data_root: "C:/SnowflakeReplication"              # Adjust if different
+  data_root: "C:/SnowflakeReplication"
 
+# CDC Configuration
 cdc:
-  cdc_suffix: "_CDC"                                # Keep default unless different
-  
+  cdc_suffix: "_CDC"
+  cdc_schema: "juka_cdc"  # Schema where CDC tables are located
+  metadata_action: "METADATA$ACTION"
+  metadata_isupdate: "METADATA$ISUPDATE"
+  metadata_row_id: "METADATA$ROW_ID"
+  insert_datetime: "INSERTDATETIME"
+
+# Parquet Configuration
 parquet:
-  max_file_size_mb: 256                             # Adjust based on table sizes
-  compression: "snappy"                             # Keep default
+  max_file_size_mb: 256
+  compression: "snappy"
+
+# Processing Configuration
+processing:
+  timezone: "US/Eastern"
+  max_retries: 3
+  retry_delay_seconds: 10
+  archive_retention_days: 30
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  date_format: "%Y-%m-%d %H:%M:%S"
