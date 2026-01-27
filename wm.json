@@ -1,0 +1,11 @@
+{
+  "description": "Package-level watermarks for CDC processing",
+  "watermarks": {
+    "package_abc": {
+      "last_update_timestamp": "2026-01-01T00:00:00",
+      "last_run_type": "base_snapshot",
+      "last_run_status": "success",
+      "tables_count": 0
+    }
+  }
+}
