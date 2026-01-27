@@ -77,23 +77,25 @@ class SQLServerPKExtractor:
         
         query = """
         SELECT 
-            t.TABLE_SCHEMA,
             t.TABLE_NAME,
-            c.COLUMN_NAME,
-            c.ORDINAL_POSITION
+            kcu.COLUMN_NAME,
+            kcu.ORDINAL_POSITION
         FROM 
             INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
         INNER JOIN 
-            INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE c 
-            ON tc.CONSTRAINT_NAME = c.CONSTRAINT_NAME
+            INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu 
+            ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
+            AND tc.TABLE_SCHEMA = kcu.TABLE_SCHEMA
+            AND tc.TABLE_NAME = kcu.TABLE_NAME
         INNER JOIN 
             INFORMATION_SCHEMA.TABLES t 
-            ON t.TABLE_NAME = c.TABLE_NAME AND t.TABLE_SCHEMA = c.TABLE_SCHEMA
+            ON t.TABLE_NAME = kcu.TABLE_NAME 
+            AND t.TABLE_SCHEMA = kcu.TABLE_SCHEMA
         WHERE 
             tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
             AND t.TABLE_SCHEMA = ?
         ORDER BY 
-            t.TABLE_NAME, c.ORDINAL_POSITION
+            t.TABLE_NAME, kcu.ORDINAL_POSITION
         """
         
         try:
@@ -103,7 +105,7 @@ class SQLServerPKExtractor:
             pk_mappings = {}
             
             for row in cursor.fetchall():
-                table_schema, table_name, column_name, ordinal = row
+                table_name, column_name, ordinal = row
                 
                 if table_name not in pk_mappings:
                     pk_mappings[table_name] = []
