@@ -1,18 +1,29 @@
 snowflake:
-  account: "your_account.snowflakecomputing.com"
-  user: "your_username"
-  password: "your_password"
-  warehouse: "your_warehouse"
-  database: "your_database"
-  schema: "your_schema"
-  loadtracker_table: "LOADTRACKER"
+  account: "your_account.snowflakecomputing.com"    # Replace with your account
+  user: "your_reader_username"                      # Replace with your username
+  password: "your_password"                         # Replace with your password
+  warehouse: "COMPUTE_WH"                           # Replace with your warehouse
+  database: "PROD_DB"                               # Replace with your database
+  schema: "PUBLIC"                                  # Replace with your schema
+  loadtracker_table: "LOADTRACKER"                  # Name of loadtracker table
 
 sqlserver:
-  server: "your_sqlserver_hostname"
-  database: "your_database"
-  auth_type: "windows"  # Use 'windows' for Windows Authentication or 'sql' for SQL Server Authentication
-  # username and password only needed if auth_type is 'sql'
-  schema: "dbo"
+  server: "your_sqlserver.company.com"              # Replace with SQL Server
+  database: "PROD_DB"                               # Replace with database
+  auth_type: "windows"                              # Use 'windows' or 'sql'
+  
+  # Only needed if auth_type is 'sql':
+  username: "sql_user"                              # Not needed for Windows auth
+  password: "sql_password"                          # Not needed for Windows auth
+  
+  schema: "dbo"                                     # Schema where tables exist
 
 filesystem:
-  data_root: "C:/SnowflakeReplication"
+  data_root: "C:/SnowflakeReplication"              # Adjust if different
+
+cdc:
+  cdc_suffix: "_CDC"                                # Keep default unless different
+  
+parquet:
+  max_file_size_mb: 256                             # Adjust based on table sizes
+  compression: "snappy"                             # Keep default
