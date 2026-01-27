@@ -1,0 +1,17 @@
+# Core dependencies
+snowflake-connector-python>=3.0.0
+pyarrow>=10.0.0
+pandas>=1.5.0
+PyYAML>=6.0
+
+# SQL Server connectivity (for primary key extraction)
+pyodbc>=4.0.0
+
+# Timezone support
+pytz>=2023.3
+
+# Optional but recommended for performance
+fastparquet>=2023.0.0
+
+# For development/testing
+pytest>=7.0.0
