@@ -110,12 +110,18 @@ class BaseSnapshotCreator:
             table_dir = self.dir_manager.get_package_table_dir(self.package_name, table_name)
             stage_path = f"@~/base_snapshot_{self.package_name}_{table_name}/"
             
+            # Get database and schema from config for fully qualified table name
+            database = self.config['snowflake']['database']
+            schema = self.config['snowflake']['schema']
+            qualified_table_name = f"{database}.{schema}.{table_name}"
+            
             # Step 1: Export table to Snowflake internal stage as Parquet
             self.logger.info(f"Exporting {table_name} to Snowflake stage...")
+            self.logger.info(f"Using fully qualified table: {qualified_table_name}")
             
             export_query = f"""
             COPY INTO {stage_path}
-            FROM {table_name}
+            FROM {qualified_table_name}
             FILE_FORMAT = (
                 TYPE = PARQUET
                 COMPRESSION = '{self.config['parquet']['compression'].upper()}'
