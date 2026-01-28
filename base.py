@@ -1,6 +1,6 @@
 """
-Script 1: Create Base Snapshot
-Downloads full base tables for a package and creates initial snapshot
+Alternative Script 1: Create Base Snapshot (Direct Query Method)
+Downloads data directly from Snowflake using SQL queries instead of stage files
 """
 
 import argparse
@@ -8,8 +8,8 @@ import sys
 from pathlib import Path
 from datetime import datetime
 import pandas as pd
-import pyarrow.parquet as pq
 import pyarrow as pa
+import pyarrow.parquet as pq
 
 from common_utils import (
     ConfigManager, WatermarkManager, DirectoryManager,
@@ -18,14 +18,14 @@ from common_utils import (
 )
 
 
-class BaseSnapshotCreator:
-    """Create base snapshots for package tables"""
+class BaseSnapshotCreatorDirect:
+    """Create base snapshots by querying Snowflake directly"""
     
     def __init__(self, config_path, package_name):
         self.config = ConfigManager.load_config(config_path)
         self.package_name = package_name
         
-        # Sanitize package name for file system (replace spaces and special chars)
+        # Sanitize package name for file system
         self.package_name_safe = package_name.replace(' ', '_').replace('/', '_').replace('\\', '_')
         
         # Initialize directory manager
@@ -48,31 +48,15 @@ class BaseSnapshotCreator:
         self.conn = None
         
     def get_package_tables(self):
-        """
-        Get list of tables for the package from loadtracker
-        
-        Returns:
-            list: List of table names
-        """
+        """Get list of tables for the package from loadtracker"""
         loadtracker_table = self.config['snowflake']['loadtracker_table']
         
-        # If loadtracker table doesn't contain schema qualifier, use current schema
-        if '.' not in loadtracker_table:
-            # Use simple table name (already in current schema)
-            query = f"""
-            SELECT DISTINCT TABLENAME
-            FROM {loadtracker_table}
-            WHERE PACKAGENAME = %s
-            ORDER BY TABLENAME
-            """
-        else:
-            # Use fully qualified table name
-            query = f"""
-            SELECT DISTINCT TABLENAME
-            FROM {loadtracker_table}
-            WHERE PACKAGENAME = %s
-            ORDER BY TABLENAME
-            """
+        query = f"""
+        SELECT DISTINCT TABLENAME
+        FROM {loadtracker_table}
+        WHERE PACKAGENAME = %s
+        ORDER BY TABLENAME
+        """
         
         try:
             cursor = self.conn.cursor()
@@ -91,9 +75,9 @@ class BaseSnapshotCreator:
             self.logger.error(f"Failed to query loadtracker: {str(e)}")
             raise
     
-    def create_table_snapshot(self, table_name):
+    def create_table_snapshot_direct(self, table_name):
         """
-        Create base snapshot for a single table
+        Create base snapshot by querying table directly
         
         Args:
             table_name (str): Name of the table
@@ -111,95 +95,63 @@ class BaseSnapshotCreator:
             
             # Define file paths
             table_dir = self.dir_manager.get_package_table_dir(self.package_name_safe, table_name)
-            stage_path = f"@~/base_snapshot_{self.package_name_safe}_{table_name}/"
             
-            # Get database and schema from config for fully qualified table name
+            # Get fully qualified table name
             database = self.config['snowflake']['database']
             schema = self.config['snowflake']['schema']
             qualified_table_name = f"{database}.{schema}.{table_name}"
             
-            # Step 1: Export table to Snowflake internal stage as Parquet
-            self.logger.info(f"Exporting {table_name} to Snowflake stage...")
-            self.logger.info(f"Using fully qualified table: {qualified_table_name}")
+            self.logger.info(f"Querying table: {qualified_table_name}")
             
-            export_query = f"""
-            COPY INTO {stage_path}
-            FROM {qualified_table_name}
-            FILE_FORMAT = (
-                TYPE = PARQUET
-                COMPRESSION = '{self.config['parquet']['compression'].upper()}'
-            )
-            MAX_FILE_SIZE = {self.config['parquet']['max_file_size_mb'] * 1024 * 1024}
-            OVERWRITE = TRUE
-            HEADER = TRUE
-            """
+            # Query the table directly and fetch to pandas DataFrame
+            query = f"SELECT * FROM {qualified_table_name}"
             
             cursor = self.conn.cursor()
-            cursor.execute(export_query)
-            result = cursor.fetchone()
+            cursor.execute(query)
             
-            self.logger.info(f"Stage export result: {result}")
+            self.logger.info("Fetching data...")
             
-            # Step 2: Download from stage to local filesystem
-            self.logger.info(f"Downloading files from stage to local filesystem...")
+            # Fetch all data
+            # For large tables, we'll fetch in batches
+            rows = cursor.fetchall()
             
-            local_temp_dir = table_dir / 'temp'
-            local_temp_dir.mkdir(parents=True, exist_ok=True)
+            if not rows:
+                self.logger.warning(f"Table {table_name} is empty (0 rows)")
+                # Still create empty parquet files
+                columns = [desc[0] for desc in cursor.description]
+                df = pd.DataFrame(columns=columns)
+            else:
+                # Get column names
+                columns = [desc[0] for desc in cursor.description]
+                
+                self.logger.info(f"Fetched {len(rows):,} rows, creating DataFrame...")
+                
+                # Create DataFrame
+                df = pd.DataFrame(rows, columns=columns)
             
-            get_query = f"GET {stage_path} 'file://{str(local_temp_dir).replace(chr(92), '/')}'"
+            row_count = len(df)
             
-            cursor.execute(get_query)
-            get_result = cursor.fetchall()
+            self.logger.info(f"DataFrame created with {row_count:,} rows")
             
-            self.logger.info(f"Downloaded {len(get_result)} file(s)")
+            # Convert to PyArrow Table for efficient Parquet writing
+            pa_table = pa.Table.from_pandas(df)
             
-            # Step 3: Combine Parquet files if multiple
-            parquet_files = list(local_temp_dir.glob('*.parquet')) + list(local_temp_dir.glob('*.gz.parquet'))
-            
-            if not parquet_files:
-                raise Exception(f"No Parquet files found for {table_name}")
-            
-            self.logger.info(f"Combining {len(parquet_files)} Parquet file(s)...")
-            
-            # Read all parquet files
-            tables_to_combine = []
-            for pq_file in parquet_files:
-                table = pq.read_table(pq_file)
-                tables_to_combine.append(table)
-            
-            # Combine into single table
-            combined_table = pa.concat_tables(tables_to_combine)
-            row_count = len(combined_table)
-            
-            self.logger.info(f"Combined table has {row_count:,} rows")
-            
-            # Step 4: Write base_snapshot.parquet
+            # Write base_snapshot.parquet
             base_snapshot_path = table_dir / 'base_snapshot.parquet'
-            pq.write_table(combined_table, base_snapshot_path, compression='snappy')
+            pq.write_table(pa_table, base_snapshot_path, compression='snappy')
             
             self.logger.info(f"Created base_snapshot.parquet: {base_snapshot_path}")
             
-            # Step 5: Create current_state.parquet (identical to base_snapshot initially)
+            # Create current_state.parquet (identical to base_snapshot initially)
             current_state_path = table_dir / 'current_state.parquet'
-            pq.write_table(combined_table, current_state_path, compression='snappy')
+            pq.write_table(pa_table, current_state_path, compression='snappy')
             
             self.logger.info(f"Created current_state.parquet: {current_state_path}")
-            
-            # Step 6: Cleanup
-            self.logger.info("Cleaning up temporary files...")
-            
-            # Remove local temp files
-            for pq_file in parquet_files:
-                pq_file.unlink()
-            local_temp_dir.rmdir()
-            
-            # Remove files from Snowflake stage
-            cursor.execute(f"REMOVE {stage_path}")
             
             # Record table metrics
             table_end_time = datetime.now()
             self.metrics_mgr.record_table_metrics(
-                package_name=self.package_name_safe,  # Use safe name for metrics
+                package_name=self.package_name_safe,
                 table_name=table_name,
                 run_type='base_snapshot',
                 start_time=table_start_time,
@@ -248,7 +200,7 @@ class BaseSnapshotCreator:
                 self.logger.info(f"\nProcessing table {idx}/{len(tables)}: {table_name}")
                 
                 try:
-                    row_count = self.create_table_snapshot(table_name)
+                    row_count = self.create_table_snapshot_direct(table_name)
                     total_rows += row_count
                     successful_tables += 1
                     
@@ -260,7 +212,7 @@ class BaseSnapshotCreator:
             run_end_time = get_current_timestamp_est()
             
             self.watermark_mgr.set_watermark(
-                package_name=self.package_name_safe,  # Use safe name for watermark
+                package_name=self.package_name_safe,
                 timestamp=run_end_time,
                 run_type='base_snapshot',
                 status='success' if not failed_tables else 'partial',
@@ -269,7 +221,7 @@ class BaseSnapshotCreator:
             
             # Record run metrics
             self.metrics_mgr.record_run(
-                package_name=self.package_name_safe,  # Use safe name for metrics
+                package_name=self.package_name_safe,
                 run_type='base_snapshot',
                 start_time=run_start_time,
                 end_time=run_end_time,
@@ -307,7 +259,7 @@ class BaseSnapshotCreator:
             
             # Record failed run
             self.metrics_mgr.record_run(
-                package_name=self.package_name,
+                package_name=self.package_name_safe,
                 run_type='base_snapshot',
                 start_time=run_start_time,
                 end_time=run_end_time,
@@ -330,7 +282,7 @@ def main():
     """Main execution function"""
     
     parser = argparse.ArgumentParser(
-        description='Create base snapshot for a package from Snowflake'
+        description='Create base snapshot for a package from Snowflake (Direct Query Method)'
     )
     parser.add_argument(
         '--package',
@@ -346,7 +298,7 @@ def main():
     args = parser.parse_args()
     
     # Create and run base snapshot creator
-    creator = BaseSnapshotCreator(args.config, args.package)
+    creator = BaseSnapshotCreatorDirect(args.config, args.package)
     return creator.run()
 
 
