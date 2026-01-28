@@ -25,6 +25,9 @@ class BaseSnapshotCreator:
         self.config = ConfigManager.load_config(config_path)
         self.package_name = package_name
         
+        # Sanitize package name for file system (replace spaces and special chars)
+        self.package_name_safe = package_name.replace(' ', '_').replace('/', '_').replace('\\', '_')
+        
         # Initialize directory manager
         self.dir_manager = DirectoryManager(self.config['filesystem']['data_root'])
         self.dir_manager.ensure_structure()
@@ -32,7 +35,7 @@ class BaseSnapshotCreator:
         # Setup logging
         self.logger = setup_logging(
             self.dir_manager.get_logs_dir(),
-            f'base_snapshot_{package_name}',
+            f'base_snapshot_{self.package_name_safe}',
             level=getattr(__import__('logging'), self.config['logging']['level'])
         )
         
@@ -104,11 +107,11 @@ class BaseSnapshotCreator:
         
         try:
             # Ensure directory structure
-            self.dir_manager.ensure_table_structure(self.package_name, table_name)
+            self.dir_manager.ensure_table_structure(self.package_name_safe, table_name)
             
             # Define file paths
-            table_dir = self.dir_manager.get_package_table_dir(self.package_name, table_name)
-            stage_path = f"@~/base_snapshot_{self.package_name}_{table_name}/"
+            table_dir = self.dir_manager.get_package_table_dir(self.package_name_safe, table_name)
+            stage_path = f"@~/base_snapshot_{self.package_name_safe}_{table_name}/"
             
             # Get database and schema from config for fully qualified table name
             database = self.config['snowflake']['database']
@@ -196,7 +199,7 @@ class BaseSnapshotCreator:
             # Record table metrics
             table_end_time = datetime.now()
             self.metrics_mgr.record_table_metrics(
-                package_name=self.package_name,
+                package_name=self.package_name_safe,  # Use safe name for metrics
                 table_name=table_name,
                 run_type='base_snapshot',
                 start_time=table_start_time,
@@ -257,7 +260,7 @@ class BaseSnapshotCreator:
             run_end_time = get_current_timestamp_est()
             
             self.watermark_mgr.set_watermark(
-                package_name=self.package_name,
+                package_name=self.package_name_safe,  # Use safe name for watermark
                 timestamp=run_end_time,
                 run_type='base_snapshot',
                 status='success' if not failed_tables else 'partial',
@@ -266,7 +269,7 @@ class BaseSnapshotCreator:
             
             # Record run metrics
             self.metrics_mgr.record_run(
-                package_name=self.package_name,
+                package_name=self.package_name_safe,  # Use safe name for metrics
                 run_type='base_snapshot',
                 start_time=run_start_time,
                 end_time=run_end_time,
