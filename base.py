@@ -53,12 +53,23 @@ class BaseSnapshotCreator:
         """
         loadtracker_table = self.config['snowflake']['loadtracker_table']
         
-        query = f"""
-        SELECT DISTINCT TABLENAME
-        FROM {loadtracker_table}
-        WHERE PACKAGENAME = %s
-        ORDER BY TABLENAME
-        """
+        # If loadtracker table doesn't contain schema qualifier, use current schema
+        if '.' not in loadtracker_table:
+            # Use simple table name (already in current schema)
+            query = f"""
+            SELECT DISTINCT TABLENAME
+            FROM {loadtracker_table}
+            WHERE PACKAGENAME = %s
+            ORDER BY TABLENAME
+            """
+        else:
+            # Use fully qualified table name
+            query = f"""
+            SELECT DISTINCT TABLENAME
+            FROM {loadtracker_table}
+            WHERE PACKAGENAME = %s
+            ORDER BY TABLENAME
+            """
         
         try:
             cursor = self.conn.cursor()
@@ -188,7 +199,7 @@ class BaseSnapshotCreator:
             )
             
             duration = (table_end_time - table_start_time).total_seconds()
-            self.logger.info(f"✓ Completed {table_name} in {duration:.2f}s ({row_count:,} rows)")
+            self.logger.info(f"Completed {table_name} in {duration:.2f}s ({row_count:,} rows)")
             
             return row_count
             
@@ -210,7 +221,7 @@ class BaseSnapshotCreator:
             # Connect to Snowflake
             self.logger.info("Connecting to Snowflake...")
             self.conn = self.sf_connector.connect()
-            self.logger.info("✓ Connected to Snowflake")
+            self.logger.info("Connected to Snowflake successfully")
             
             # Get tables for package
             tables = self.get_package_tables()
