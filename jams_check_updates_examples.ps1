@@ -66,6 +66,19 @@ class UpdateChecker:
         """
         loadtracker_table = self.config['snowflake']['loadtracker_table']
         
+        # First, let's check what columns exist
+        try:
+            cursor = self.conn.cursor()
+            self.logger.info(f"Checking columns in {loadtracker_table}...")
+            
+            # Try to get column names
+            cursor.execute(f"SELECT * FROM {loadtracker_table} LIMIT 1")
+            columns = [desc[0] for desc in cursor.description]
+            self.logger.info(f"Available columns: {columns}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to check columns: {str(e)}")
+        
         query = f"""
         SELECT MAX(LASTTABLEUPDATEDATETIME) as MAX_UPDATE_TIME
         FROM {loadtracker_table}
@@ -74,6 +87,9 @@ class UpdateChecker:
         
         try:
             cursor = self.conn.cursor()
+            self.logger.info(f"Executing query: {query}")
+            self.logger.info(f"Package name: '{self.package_name}'")
+            
             cursor.execute(query, (self.package_name,))
             
             result = cursor.fetchone()
@@ -92,6 +108,8 @@ class UpdateChecker:
             
         except Exception as e:
             self.logger.error(f"Failed to query loadtracker: {str(e)}")
+            self.logger.error(f"Query was: {query}")
+            self.logger.error(f"Package was: '{self.package_name}'")
             raise
     
     def get_updated_tables(self, watermark):
@@ -150,7 +168,7 @@ class UpdateChecker:
             # Connect to Snowflake
             self.logger.info("Connecting to Snowflake...")
             self.conn = self.sf_connector.connect()
-            self.logger.info("✓ Connected to Snowflake")
+            self.logger.info("Connected to Snowflake")
             
             # Get max update time from loadtracker
             self.logger.info("Querying loadtracker for latest updates...")
@@ -163,6 +181,21 @@ class UpdateChecker:
             
             self.logger.info(f"Max Table Update Time: {max_update_time}")
             
+            # Make both timestamps timezone-aware for comparison
+            # Import pytz at the top if not already
+            import pytz
+            est = pytz.timezone('US/Eastern')
+            
+            # If max_update_time is naive (no timezone), assume it's in EST
+            if max_update_time.tzinfo is None:
+                max_update_time = est.localize(max_update_time)
+                self.logger.info(f"Max update time localized to EST: {max_update_time}")
+            
+            # If watermark is naive (no timezone), assume it's in EST
+            if watermark.tzinfo is None:
+                watermark = est.localize(watermark)
+                self.logger.info(f"Watermark localized to EST: {watermark}")
+            
             # Compare watermark with max update time
             if max_update_time <= watermark:
                 self.logger.info("\n" + "="*80)
@@ -174,7 +207,7 @@ class UpdateChecker:
                 return 1  # Return code 1 indicates no updates
             
             # Updates detected - get details
-            self.logger.info("\n✓ UPDATES DETECTED")
+            self.logger.info("\nUPDATES DETECTED")
             self.logger.info(f"Max update time ({max_update_time}) > Watermark ({watermark})")
             
             # Get list of updated tables
