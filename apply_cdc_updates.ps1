@@ -53,7 +53,8 @@ class CDCProcessor:
         self.conn = None
         
         # CDC configuration
-        self.cdc_suffix = self.config['cdc']['cdc_suffix']
+        self.cdc_suffix = self.config['cdc'].get('cdc_suffix', '')
+        self.cdc_prefix = self.config['cdc'].get('cdc_prefix', 'CDC_')
         self.metadata_action = self.config['cdc']['metadata_action']
         self.metadata_isupdate = self.config['cdc']['metadata_isupdate']
         self.insert_datetime = self.config['cdc']['insert_datetime']
@@ -98,7 +99,11 @@ class CDCProcessor:
         Returns:
             bool: True if CDC table exists
         """
-        cdc_table_name = f"{table_name}{self.cdc_suffix}"
+        # Use prefix if configured, otherwise suffix
+        if self.cdc_prefix:
+            cdc_table_name = f"{self.cdc_prefix}{table_name}"
+        else:
+            cdc_table_name = f"{table_name}{self.cdc_suffix}"
         
         # Get CDC schema if configured, otherwise use current schema
         cdc_schema = self.config['cdc'].get('cdc_schema', self.config['snowflake']['schema'])
@@ -133,7 +138,11 @@ class CDCProcessor:
         Returns:
             Path or None: Path to downloaded CDC parquet file
         """
-        cdc_table_name = f"{table_name}{self.cdc_suffix}"
+        # Use prefix if configured, otherwise suffix
+        if self.cdc_prefix:
+            cdc_table_name = f"{self.cdc_prefix}{table_name}"
+        else:
+            cdc_table_name = f"{table_name}{self.cdc_suffix}"
         
         # Get CDC schema if configured, otherwise use current schema
         cdc_schema = self.config['cdc'].get('cdc_schema', self.config['snowflake']['schema'])
