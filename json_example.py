@@ -137,7 +137,10 @@ if package_name:
         else:
             expected_cdc = f"{base_table}{cdc_suffix}"
         
-        # Check if it exists
+        # Convert to UPPERCASE (Snowflake default)
+        expected_cdc = expected_cdc.upper()
+        
+        # Check if it exists (CDC tables list is already uppercase)
         exists = expected_cdc in cdc_tables
         
         status = "✓ EXISTS" if exists else "✗ MISSING"
