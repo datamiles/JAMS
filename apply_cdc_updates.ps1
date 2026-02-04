@@ -105,8 +105,14 @@ class CDCProcessor:
         else:
             cdc_table_name = f"{table_name}{self.cdc_suffix}"
         
+        # Convert to uppercase (Snowflake default)
+        cdc_table_name = cdc_table_name.upper()
+        
         # Get CDC schema if configured, otherwise use current schema
         cdc_schema = self.config['cdc'].get('cdc_schema', self.config['snowflake']['schema'])
+        cdc_schema = cdc_schema.upper()
+        
+        self.logger.info(f"Checking for CDC table: {cdc_schema}.{cdc_table_name}")
         
         query = """
         SELECT COUNT(*) 
@@ -120,6 +126,11 @@ class CDCProcessor:
             cursor.execute(query, (cdc_schema, cdc_table_name))
             
             count = cursor.fetchone()[0]
+            
+            if count > 0:
+                self.logger.info(f"CDC table exists: {cdc_schema}.{cdc_table_name}")
+            else:
+                self.logger.warning(f"CDC table not found: {cdc_schema}.{cdc_table_name}")
             
             return count > 0
             
@@ -144,8 +155,12 @@ class CDCProcessor:
         else:
             cdc_table_name = f"{table_name}{self.cdc_suffix}"
         
+        # Convert to uppercase (Snowflake default)
+        cdc_table_name = cdc_table_name.upper()
+        
         # Get CDC schema if configured, otherwise use current schema
         cdc_schema = self.config['cdc'].get('cdc_schema', self.config['snowflake']['schema'])
+        cdc_schema = cdc_schema.upper()
         
         # Construct fully qualified CDC table name
         qualified_cdc_table = f"{cdc_schema}.{cdc_table_name}"
